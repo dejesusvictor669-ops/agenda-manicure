@@ -1,45 +1,235 @@
-<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1"><title>Agende seu horário</title>
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;700&family=DM+Serif+Display&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css"></head><body><main>
-<h1>Agende seu horário</h1><p class="sub">Escolha o serviço, o dia e o horário. A confirmação final é feita pelo WhatsApp.</p>
-<h2>Serviço</h2><div id="services" role="radiogroup" aria-label="Serviço"></div>
-<h2>Data</h2><input type="date" id="day" aria-label="Data">
-<div id="slots" class="slots" aria-live="polite"></div>
-<h2>Seus dados</h2>
-<input type="text" id="name" placeholder="Seu nome" maxlength="80" autocomplete="name">
-<input type="tel" id="phone" placeholder="Seu WhatsApp com DDD" inputmode="numeric" autocomplete="tel">
-<label class="row legal"><input type="checkbox" id="consent"> <span>Concordo que meu nome e WhatsApp sejam usados apenas para organizar meu atendimento. Dados de atendimentos antigos são anonimizados após 6 meses. Para apagar seus dados antes, peça pelo WhatsApp.</span></label>
-<div id="msg" class="msg" role="alert"></div>
-<button class="btn" id="go" disabled>Agendar pelo WhatsApp</button>
-</main><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="config.js"></script><script>
-let svc=null,time=null,svcs=[];
-const iso=d=>d.toISOString().slice(0,10);
-const today=new Date(Date.now()-3*3600e3);const max=new Date(today.getTime()+60*864e5);
-$("#day").min=iso(today);$("#day").max=iso(max);
-function msg(t){const m=$("#msg");m.textContent=t||"";m.classList.toggle("on",!!t)}
-function ready(){$("#go").disabled=!(svc&&time&&$("#name").value.trim().length>1&&$("#phone").value.replace(/\D/g,"").length>=10&&$("#consent").checked)}
-async function loadServices(){const{data}=await sb.from("services").select("*").order("id");svcs=data||[];
- const box=$("#services");box.textContent="";
- svcs.forEach(s=>{const l=document.createElement("label");l.className="opt";
-  const i=document.createElement("input");i.type="radio";i.name="s";i.onchange=()=>{svc=s.id;ready()};
-  const a=document.createElement("span");a.textContent=s.name;const p=document.createElement("span");p.className="price";p.textContent=brl(s.price_cents);
-  l.append(i,a,p);box.append(l)})}
-async function loadSlots(){time=null;ready();const box=$("#slots");box.textContent="";const d=$("#day").value;if(!d)return;
- const{data,error}=await sb.rpc("available_slots",{p_day:d});
- if(error||!data.length){box.textContent="Sem horários livres neste dia. Escolha outra data.";return}
- data.forEach(r=>{const b=document.createElement("button");b.type="button";b.className="slot";b.textContent=r.at_time.slice(0,5);b.setAttribute("aria-pressed","false");
-  b.onclick=()=>{box.querySelectorAll(".slot").forEach(x=>x.setAttribute("aria-pressed","false"));b.setAttribute("aria-pressed","true");time=r.at_time;ready()};box.append(b)})}
-$("#day").onchange=loadSlots;["name","phone","consent"].forEach(i=>$("#"+i).addEventListener("input",ready));
-$("#go").onclick=async()=>{msg("");$("#go").disabled=true;
- const name=$("#name").value.trim(),phone=$("#phone").value.replace(/\D/g,""),day=$("#day").value;
- const{error}=await sb.rpc("create_booking",{p_service:svc,p_day:day,p_time:time,p_name:name,p_phone:phone,p_consent:$("#consent").checked});
- if(error){const m=error.message||"";
-  msg(m.includes("slot_taken")?"Esse horário acabou de ser ocupado. Escolha outro dia ou horário.":m.includes("too_many")?"Você já tem agendamentos pendentes. Aguarde a confirmação pelo WhatsApp.":"Não foi possível agendar. Confira os dados e tente de novo.");
-  if(m.includes("slot_taken"))loadSlots();ready();return}
- const s=svcs.find(x=>x.id===svc);
- const t=`Olá! Agendei pelo site: ${s.name}, ${fmtDay(day)} às ${time.slice(0,5)}. Meu nome é ${name}.`;
- location.href=`https://wa.me/${WHATSAPP}?text=${encodeURIComponent(t)}`};
-loadServices();
-</script></body></html>
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>Agende seu horário</title>
+  <meta name="description" content="Agende seu horário de manicure e pedicure online, em menos de um minuto.">
+  <meta name="theme-color" content="#4B2A55">
+  <meta property="og:title" content="Agende seu horário">
+  <meta property="og:description" content="Escolha o serviço, o dia e o horário. A confirmação chega pelo WhatsApp.">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;700&family=DM+Serif+Display&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="hero">
+    <div class="brand"><span class="logo" aria-hidden="true">✦</span><span class="brand-name"></span></div>
+    <h1>Agende seu horário</h1>
+    <p class="sub">Escolha o serviço, o dia e o horário. Leva menos de um minuto e a confirmação chega pelo WhatsApp.</p>
+  </header>
+
+  <main>
+    <section class="step" id="step-svc">
+      <h2><span class="num">1</span>Serviço</h2>
+      <div id="services" role="radiogroup" aria-label="Serviço"><p class="hint loading">Carregando serviços</p></div>
+    </section>
+
+    <section class="step" id="step-day">
+      <h2><span class="num">2</span>Dia</h2>
+      <div id="days" class="days" role="group" aria-label="Dia"></div>
+    </section>
+
+    <section class="step" id="step-time">
+      <h2><span class="num">3</span>Horário</h2>
+      <div id="slots" class="slots" aria-live="polite"></div>
+      <p class="hint" id="slots-hint">Escolha um dia para ver os horários livres.</p>
+    </section>
+
+    <section class="step" id="step-data">
+      <h2><span class="num">4</span>Seus dados</h2>
+      <label class="field" for="name">Nome</label>
+      <input type="text" id="name" placeholder="Como podemos te chamar?" maxlength="80" autocomplete="name">
+      <label class="field" for="phone">WhatsApp</label>
+      <input type="tel" id="phone" placeholder="(11) 98765-4321" inputmode="numeric" autocomplete="tel" maxlength="15">
+      <label class="legal"><input type="checkbox" id="consent">
+        <span>Concordo que meu nome e WhatsApp sejam usados apenas para organizar meu atendimento. Dados de atendimentos antigos são anonimizados após 6 meses. Para apagar seus dados antes, peça pelo WhatsApp.</span>
+      </label>
+    </section>
+
+    <div id="summary" class="summary" hidden></div>
+    <div id="msg" class="msg" role="alert"></div>
+
+    <div class="cta">
+      <button class="btn wa" id="go" disabled>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5a8.4 8.4 0 0 1-12.4 7.4L3 21l2.1-5.6A8.4 8.4 0 1 1 21 11.5z"/></svg>
+        <span>Agendar pelo WhatsApp</span>
+      </button>
+    </div>
+  </main>
+
+  <footer><span class="brand-name"></span> · Agendamento online</footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+  <script src="config.js"></script>
+  <script>
+    const DOW = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+    const DOW_LONG = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
+    const MES = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+    const DIAS_A_FRENTE = 30;
+
+    let svc = null, day = null, time = null, svcs = [], slotsReq = 0;
+
+    document.querySelectorAll(".brand-name").forEach(e => e.textContent = NOME_ESTUDIO);
+
+    const dur = m => m % 60 ? `${Math.floor(m / 60) ? Math.floor(m / 60) + "h" : ""}${m % 60}min` : `${m / 60}h`;
+    const dowOf = iso => new Date(iso + "T12:00:00Z").getUTCDay();
+
+    // No celular, leva a cliente ao próximo passo (só na primeira escolha)
+    function next(id) {
+      const el = $(id);
+      if (!el.classList.contains("done")) setTimeout(() => el.scrollIntoView({ behavior: "smooth", block: "start" }), 150);
+    }
+
+    function msg(t) { const m = $("#msg"); m.textContent = t || ""; m.classList.toggle("on", !!t); }
+
+    function phoneDigits() { return $("#phone").value.replace(/\D/g, ""); }
+
+    function ready() {
+      const okData = $("#name").value.trim().length > 1 && phoneDigits().length >= 10 && $("#consent").checked;
+      $("#step-svc").classList.toggle("done", !!svc);
+      $("#step-day").classList.toggle("done", !!day);
+      $("#step-time").classList.toggle("done", !!time);
+      $("#step-data").classList.toggle("done", okData);
+      $("#go").disabled = !(svc && day && time && okData);
+      renderSummary();
+    }
+
+    function renderSummary() {
+      const box = $("#summary");
+      const s = svcs.find(x => x.id === svc);
+      if (!s || !day || !time) { box.hidden = true; return; }
+      box.textContent = "";
+      const line = document.createElement("div");
+      const b = document.createElement("b");
+      b.textContent = s.name;
+      line.append(b, ` · ${DOW_LONG[dowOf(day)]}, ${fmtDay(day).slice(0, 5)} às ${time.slice(0, 5)}`);
+      const total = document.createElement("div");
+      total.className = "total";
+      const l = document.createElement("span"); l.textContent = "Total";
+      const v = document.createElement("span"); v.textContent = brl(s.price_cents);
+      total.append(l, v);
+      box.append(line, total);
+      box.hidden = false;
+    }
+
+    async function loadServices() {
+      const { data, error } = await sb.from("services").select("*").order("id");
+      const box = $("#services");
+      box.textContent = "";
+      svcs = data || [];
+      if (error || !svcs.length) {
+        const p = document.createElement("p");
+        p.className = "hint";
+        p.textContent = "Não foi possível carregar os serviços. Atualize a página.";
+        box.append(p);
+        return;
+      }
+      svcs.forEach(s => {
+        const l = document.createElement("label"); l.className = "opt";
+        const i = document.createElement("input"); i.type = "radio"; i.name = "s";
+        i.onchange = () => { next(day ? "#step-time" : "#step-day"); svc = s.id; ready(); };
+        const info = document.createElement("span");
+        const n = document.createElement("span"); n.className = "name"; n.textContent = s.name;
+        const d = document.createElement("span"); d.className = "dur"; d.textContent = dur(s.duration_min);
+        info.append(n, d);
+        const p = document.createElement("span"); p.className = "price"; p.textContent = brl(s.price_cents);
+        l.append(i, info, p);
+        box.append(l);
+      });
+    }
+
+    function renderDays() {
+      const box = $("#days");
+      const hoje = new Date(Date.now() - 3 * 3600e3); // horário de Brasília
+      for (let k = 0; k < DIAS_A_FRENTE; k++) {
+        const d = new Date(hoje.getTime() + k * 864e5);
+        const iso = d.toISOString().slice(0, 10);
+        const b = document.createElement("button");
+        b.type = "button"; b.className = "day"; b.setAttribute("aria-pressed", "false");
+        b.setAttribute("aria-label", `${DOW_LONG[d.getUTCDay()]}, ${fmtDay(iso)}`);
+        const top = document.createElement("small"); top.textContent = k === 0 ? "Hoje" : DOW[d.getUTCDay()];
+        const mid = document.createElement("strong"); mid.textContent = d.getUTCDate();
+        const bot = document.createElement("small"); bot.textContent = MES[d.getUTCMonth()];
+        b.append(top, mid, bot);
+        b.onclick = () => {
+          box.querySelectorAll(".day").forEach(x => x.setAttribute("aria-pressed", "false"));
+          b.setAttribute("aria-pressed", "true");
+          if (!day) next("#step-time");
+          day = iso;
+          loadSlots();
+        };
+        box.append(b);
+      }
+    }
+
+    async function loadSlots() {
+      time = null; ready();
+      const box = $("#slots"), hint = $("#slots-hint");
+      box.textContent = "";
+      if (!day) return;
+      const req = ++slotsReq;
+      hint.hidden = false; hint.textContent = "Buscando horários livres"; hint.classList.add("loading");
+      const { data, error } = await sb.rpc("available_slots", { p_day: day });
+      if (req !== slotsReq) return; // o usuário já trocou de dia
+      hint.classList.remove("loading");
+      if (error || !data.length) {
+        hint.textContent = "Sem horários livres neste dia. Escolha outra data.";
+        return;
+      }
+      hint.hidden = true;
+      data.forEach(r => {
+        const b = document.createElement("button");
+        b.type = "button"; b.className = "slot"; b.textContent = r.at_time.slice(0, 5);
+        b.setAttribute("aria-pressed", "false");
+        b.onclick = () => {
+          box.querySelectorAll(".slot").forEach(x => x.setAttribute("aria-pressed", "false"));
+          b.setAttribute("aria-pressed", "true");
+          next("#step-data");
+          time = r.at_time;
+          ready();
+        };
+        box.append(b);
+      });
+    }
+
+    // Máscara (11) 98765-4321
+    $("#phone").addEventListener("input", e => {
+      const d = phoneDigits().slice(0, 11);
+      let f = d;
+      if (d.length > 2) f = `(${d.slice(0, 2)}) ${d.slice(2)}`;
+      if (d.length > 6) f = `(${d.slice(0, 2)}) ${d.slice(2, d.length - 4)}-${d.slice(-4)}`;
+      e.target.value = f;
+    });
+    ["name", "phone", "consent"].forEach(i => $("#" + i).addEventListener("input", ready));
+
+    $("#go").onclick = async () => {
+      msg("");
+      const go = $("#go"), label = go.querySelector("span");
+      go.disabled = true; label.textContent = "Reservando…";
+      const name = $("#name").value.trim(), phone = phoneDigits();
+      const { error } = await sb.rpc("create_booking", {
+        p_service: svc, p_day: day, p_time: time, p_name: name, p_phone: phone, p_consent: $("#consent").checked
+      });
+      label.textContent = "Agendar pelo WhatsApp";
+      if (error) {
+        const m = error.message || "";
+        msg(m.includes("slot_taken") ? "Esse horário acabou de ser ocupado. Escolha outro dia ou horário."
+          : m.includes("too_many") ? "Você já tem agendamentos pendentes. Aguarde a confirmação pelo WhatsApp."
+          : "Não foi possível agendar. Confira os dados e tente de novo.");
+        if (m.includes("slot_taken")) loadSlots();
+        ready();
+        return;
+      }
+      const s = svcs.find(x => x.id === svc);
+      const t = `Olá! Agendei pelo site: ${s.name}, ${fmtDay(day)} às ${time.slice(0, 5)}. Meu nome é ${name}.`;
+      location.href = `https://wa.me/${WHATSAPP}?text=${encodeURIComponent(t)}`;
+    };
+
+    renderDays();
+    loadServices();
+  </script>
+</body>
+</html>

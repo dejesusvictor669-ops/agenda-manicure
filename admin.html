@@ -1,43 +1,220 @@
-<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="robots" content="noindex">
-<meta name="viewport" content="width=device-width,initial-scale=1"><title>Painel</title>
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;700&family=DM+Serif+Display&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css"></head><body><main>
-<h1>Painel</h1>
-<form id="login"><input type="email" id="em" placeholder="E-mail" autocomplete="username"><input type="password" id="pw" placeholder="Senha" autocomplete="current-password"><div id="msg" class="msg" role="alert"></div><button class="btn">Entrar</button></form>
-<div id="app" hidden>
-<div class="tabs"><button class="btn sm" data-t="ag">Agenda</button><button class="btn sm ghost" data-t="hr">Horários</button><button class="btn sm ghost" data-t="sv">Serviços</button><button class="btn sm ghost" id="out">Sair</button></div>
-<section id="ag"></section><section id="hr" hidden></section><section id="sv" hidden></section></div>
-</main><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="config.js"></script><script>
-const DIAS=["Domingo","Segunda","Terça","Quarta","Quinta","Sexta","Sábado"];
-const el=(t,txt,c)=>{const e=document.createElement(t);if(txt!=null)e.textContent=txt;if(c)e.className=c;return e};
-const btn=(t,f,c="ghost")=>{const b=el("button",t,"btn sm "+c);b.type="button";b.onclick=f;return b};
-async function boot(){const{data:{session}}=await sb.auth.getSession();$("#login").hidden=!!session;$("#app").hidden=!session;if(session)show("ag")}
-$("#login").onsubmit=async e=>{e.preventDefault();const{error}=await sb.auth.signInWithPassword({email:$("#em").value,password:$("#pw").value});
- if(error){$("#msg").textContent="E-mail ou senha incorretos.";$("#msg").classList.add("on")}else boot()};
-$("#out").onclick=async()=>{await sb.auth.signOut();boot()};
-document.querySelectorAll("[data-t]").forEach(b=>b.onclick=()=>show(b.dataset.t));
-function show(t){["ag","hr","sv"].forEach(i=>$("#"+i).hidden=i!==t);({ag,hr,sv})[t]()}
-async function ag(){const s=$("#ag");s.textContent="";const{data,error}=await sb.from("bookings").select("*,services(name)").in("status",["pendente","confirmado"]).order("day").order("at_time");
- if(error||!data.length){s.append(el("p","Nenhum agendamento em aberto.","sub"));return}
- data.forEach(b=>{const c=el("div",null,"card");c.append(el("b",`${fmtDay(b.day)} ${b.at_time.slice(0,5)} · ${b.services.name}`),el("div",`${b.client_name} · ${b.client_phone} · ${b.status}`));
-  const up=(st)=>async()=>{await sb.from("bookings").update({status:st}).eq("id",b.id);ag()};
-  if(b.status==="pendente")c.append(btn("Confirmar",up("confirmado"),""));
-  c.append(btn("Atendido",up("atendido")),btn("Remarcar",async()=>{const d=prompt("Nova data (AAAA-MM-DD)",b.day);const h=prompt("Novo horário (HH:MM)",b.at_time.slice(0,5));if(!d||!h)return;
-    const{error}=await sb.from("bookings").update({day:d,at_time:h}).eq("id",b.id);if(error)alert("Horário já ocupado ou inválido.");ag()}),
-   btn("Cancelar",up("cancelado")),btn("Excluir",async()=>{if(confirm("Excluir definitivamente?")){await sb.from("bookings").delete().eq("id",b.id);ag()}}));
-  s.append(c)})}
-async function hr(){const s=$("#hr");s.textContent="";const{data:w}=await sb.from("weekly_hours").select("*").order("at_time");
- DIAS.forEach((n,d)=>{const c=el("div",null,"card");c.append(el("b",n+" "));(w||[]).filter(x=>x.weekday===d).forEach(x=>c.append(btn(x.at_time.slice(0,5)+" ✕",async()=>{await sb.from("weekly_hours").delete().match({weekday:d,at_time:x.at_time});hr()})));
-  const i=el("input");i.type="time";c.append(i,btn("Adicionar",async()=>{if(i.value){await sb.from("weekly_hours").insert({weekday:d,at_time:i.value});hr()}},""));s.append(c)});
- s.append(el("h2","Dias sem atendimento"));const{data:o}=await sb.from("days_off").select("*").order("day");
- (o||[]).forEach(x=>s.append(btn(fmtDay(x.day)+" ✕",async()=>{await sb.from("days_off").delete().eq("day",x.day);hr()})));
- const i=el("input");i.type="date";s.append(i,btn("Bloquear dia",async()=>{if(i.value){await sb.from("days_off").upsert({day:i.value});hr()}},""))}
-async function sv(){const s=$("#sv");s.textContent="";const{data}=await sb.from("services").select("*").order("id");
- (data||[]).forEach(x=>{const c=el("div",null,"card"),n=el("input"),p=el("input");n.type="text";n.value=x.name;p.type="text";p.value=(x.price_cents/100).toFixed(2);p.inputMode="decimal";
-  c.append(n,p,btn("Salvar",async()=>{await sb.from("services").update({name:n.value.trim(),price_cents:Math.round(parseFloat(p.value.replace(",","."))*100)}).eq("id",x.id);sv()},""),
-   btn(x.active?"Ocultar":"Mostrar",async()=>{await sb.from("services").update({active:!x.active}).eq("id",x.id);sv()}));s.append(c)});
- const n=el("input"),p=el("input");n.type="text";n.placeholder="Novo serviço";p.type="text";p.placeholder="Preço (ex.: 45,00)";
- s.append(n,p,btn("Adicionar",async()=>{await sb.from("services").insert({name:n.value.trim(),price_cents:Math.round(parseFloat(p.value.replace(",","."))*100)});sv()},""))}
-boot();
-</script></body></html>
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="robots" content="noindex">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#4B2A55">
+  <title>Painel</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;700&family=DM+Serif+Display&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="admin">
+  <header class="topbar">
+    <div class="inner">
+      <div class="brand"><span class="logo" aria-hidden="true">✦</span><span class="brand-name"></span></div>
+      <button class="btn sm ghost" id="out" hidden>Sair</button>
+    </div>
+  </header>
+
+  <main>
+    <form id="login" class="login" hidden>
+      <h1>Painel</h1>
+      <p class="sub">Entre para gerenciar a agenda.</p>
+      <label class="field" for="em">E-mail</label>
+      <input type="email" id="em" autocomplete="username" required>
+      <label class="field" for="pw">Senha</label>
+      <input type="password" id="pw" autocomplete="current-password" required>
+      <div id="msg" class="msg" role="alert"></div>
+      <button class="btn">Entrar</button>
+    </form>
+
+    <div id="app" hidden>
+      <div class="tabs" role="tablist">
+        <button role="tab" data-t="ag">Agenda</button>
+        <button role="tab" data-t="hr">Horários</button>
+        <button role="tab" data-t="sv">Serviços</button>
+      </div>
+      <section id="ag"></section>
+      <section id="hr" hidden></section>
+      <section id="sv" hidden></section>
+    </div>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+  <script src="config.js"></script>
+  <script>
+    const DIAS = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
+
+    const el = (t, txt, c) => { const e = document.createElement(t); if (txt != null) e.textContent = txt; if (c) e.className = c; return e; };
+    const btn = (t, f, c = "ghost") => { const b = el("button", t, "btn sm " + c); b.type = "button"; b.onclick = f; return b; };
+    const input = (type, value, placeholder) => { const i = el("input"); i.type = type; if (value != null) i.value = value; if (placeholder) i.placeholder = placeholder; return i; };
+    const field = (label, inp) => { const w = el("label", null, "field"); w.append(label, inp); return w; };
+    const empty = t => el("p", t, "empty");
+    const toCents = v => Math.round(parseFloat(String(v).replace(",", ".")) * 100);
+    const fmtPhone = p => p.length === 11 ? `(${p.slice(0, 2)}) ${p.slice(2, 7)}-${p.slice(7)}` : `(${p.slice(0, 2)}) ${p.slice(2, 6)}-${p.slice(6)}`;
+
+    document.querySelectorAll(".brand-name").forEach(e => e.textContent = NOME_ESTUDIO);
+
+    async function boot() {
+      const { data: { session } } = await sb.auth.getSession();
+      $("#login").hidden = !!session;
+      $("#app").hidden = !session;
+      $("#out").hidden = !session;
+      if (session) show("ag");
+    }
+
+    $("#login").onsubmit = async e => {
+      e.preventDefault();
+      const { error } = await sb.auth.signInWithPassword({ email: $("#em").value, password: $("#pw").value });
+      if (error) { $("#msg").textContent = "E-mail ou senha incorretos."; $("#msg").classList.add("on"); }
+      else boot();
+    };
+    $("#out").onclick = async () => { await sb.auth.signOut(); boot(); };
+
+    document.querySelectorAll("[data-t]").forEach(b => b.onclick = () => show(b.dataset.t));
+    function show(t) {
+      ["ag", "hr", "sv"].forEach(i => $("#" + i).hidden = i !== t);
+      document.querySelectorAll("[data-t]").forEach(b => b.setAttribute("aria-selected", b.dataset.t === t));
+      ({ ag, hr, sv })[t]();
+    }
+
+    // ---------- Agenda ----------
+    async function ag() {
+      const s = $("#ag");
+      const { data, error } = await sb.from("bookings").select("*,services(name)")
+        .in("status", ["pendente", "confirmado"]).order("day").order("at_time");
+      s.textContent = "";
+      if (error) { s.append(empty("Não foi possível carregar a agenda.")); return; }
+      if (!data.length) { s.append(empty("Nenhum agendamento em aberto.")); return; }
+
+      let lastDay = null;
+      data.forEach(b => {
+        if (b.day !== lastDay) {
+          lastDay = b.day;
+          const dow = new Date(b.day + "T12:00:00Z").getUTCDay();
+          s.append(el("h3", `${DIAS[dow]}, ${fmtDay(b.day)}`));
+        }
+        const c = el("div", null, "card booking");
+        const who = el("div", b.client_name, "who");
+        who.append(el("span", b.status, "badge " + b.status));
+        const meta = el("div", `${b.services.name} · `, "meta");
+        const wa = el("a", fmtPhone(b.client_phone));
+        wa.href = `https://wa.me/55${b.client_phone}`; wa.target = "_blank"; wa.rel = "noopener";
+        meta.append(wa);
+        const info = el("div"); info.append(who, meta);
+
+        const up = st => async () => { await sb.from("bookings").update({ status: st }).eq("id", b.id); ag(); };
+        const actions = el("div", null, "actions");
+        if (b.status === "pendente") actions.append(btn("Confirmar", up("confirmado"), ""));
+        actions.append(
+          btn("Atendido", up("atendido")),
+          btn("Remarcar", async () => {
+            const d = prompt("Nova data (AAAA-MM-DD)", b.day);
+            const h = prompt("Novo horário (HH:MM)", b.at_time.slice(0, 5));
+            if (!d || !h) return;
+            const { error } = await sb.from("bookings").update({ day: d, at_time: h }).eq("id", b.id);
+            if (error) alert("Horário já ocupado ou inválido.");
+            ag();
+          }),
+          btn("Cancelar", up("cancelado")),
+          btn("Excluir", async () => {
+            if (confirm("Excluir definitivamente?")) { await sb.from("bookings").delete().eq("id", b.id); ag(); }
+          }, "ghost danger")
+        );
+        c.append(el("div", b.at_time.slice(0, 5), "time"), info, actions);
+        s.append(c);
+      });
+    }
+
+    // ---------- Horários ----------
+    async function hr() {
+      const s = $("#hr");
+      const [{ data: w }, { data: o }] = await Promise.all([
+        sb.from("weekly_hours").select("*").order("at_time"),
+        sb.from("days_off").select("*").order("day")
+      ]);
+      s.textContent = "";
+      s.append(el("p", "Horários que aparecem para as clientes em cada dia da semana.", "sub"));
+
+      DIAS.forEach((n, d) => {
+        const c = el("div", null, "card");
+        c.append(el("b", n));
+        const chips = el("div", null, "chips");
+        const doDia = (w || []).filter(x => x.weekday === d);
+        if (!doDia.length) chips.append(el("span", "Sem atendimento", "hint"));
+        doDia.forEach(x => chips.append(btn(x.at_time.slice(0, 5) + "  ✕", async () => {
+          await sb.from("weekly_hours").delete().match({ weekday: d, at_time: x.at_time }); hr();
+        })));
+        const i = input("time");
+        const row = el("div", null, "row");
+        row.append(i, btn("Adicionar", async () => {
+          if (i.value) { await sb.from("weekly_hours").insert({ weekday: d, at_time: i.value }); hr(); }
+        }, ""));
+        c.append(chips, row);
+        s.append(c);
+      });
+
+      s.append(el("h3", "Dias sem atendimento"));
+      const c = el("div", null, "card");
+      const chips = el("div", null, "chips");
+      if (!(o || []).length) chips.append(el("span", "Nenhum dia bloqueado.", "hint"));
+      (o || []).forEach(x => chips.append(btn(fmtDay(x.day) + "  ✕", async () => {
+        await sb.from("days_off").delete().eq("day", x.day); hr();
+      })));
+      const i = input("date");
+      const row = el("div", null, "row");
+      row.append(i, btn("Bloquear dia", async () => {
+        if (i.value) { await sb.from("days_off").upsert({ day: i.value }); hr(); }
+      }, ""));
+      c.append(chips, row);
+      s.append(c);
+    }
+
+    // ---------- Serviços ----------
+    async function sv() {
+      const s = $("#sv");
+      const { data } = await sb.from("services").select("*").order("id");
+      s.textContent = "";
+      s.append(el("p", "Serviços ocultos não aparecem para as clientes.", "sub"));
+
+      (data || []).forEach(x => {
+        const c = el("div", null, "card");
+        const n = input("text", x.name), p = input("text", (x.price_cents / 100).toFixed(2).replace(".", ","));
+        const m = input("number", x.duration_min); m.min = 15; m.step = 15;
+        p.inputMode = "decimal";
+        const row = el("div", null, "svc-row" + (x.active ? "" : " off"));
+        row.append(field("Nome", n), field("Preço (R$)", p), field("Minutos", m));
+        const actions = el("div", null, "row");
+        actions.append(
+          btn("Salvar", async () => {
+            await sb.from("services").update({ name: n.value.trim(), price_cents: toCents(p.value), duration_min: parseInt(m.value) || 60 }).eq("id", x.id);
+            sv();
+          }, ""),
+          btn(x.active ? "Ocultar" : "Mostrar", async () => { await sb.from("services").update({ active: !x.active }).eq("id", x.id); sv(); })
+        );
+        c.append(row, actions);
+        s.append(c);
+      });
+
+      s.append(el("h3", "Novo serviço"));
+      const c = el("div", null, "card");
+      const n = input("text", null, "Ex.: Esmaltação"), p = input("text", null, "45,00"), m = input("number", 60);
+      m.min = 15; m.step = 15; p.inputMode = "decimal";
+      const row = el("div", null, "svc-row");
+      row.append(field("Nome", n), field("Preço (R$)", p), field("Minutos", m));
+      c.append(row, btn("Adicionar serviço", async () => {
+        if (!n.value.trim() || isNaN(toCents(p.value))) { alert("Preencha nome e preço."); return; }
+        await sb.from("services").insert({ name: n.value.trim(), price_cents: toCents(p.value), duration_min: parseInt(m.value) || 60 });
+        sv();
+      }, ""));
+      s.append(c);
+    }
+
+    boot();
+  </script>
+</body>
+</html>
