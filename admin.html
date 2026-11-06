@@ -72,7 +72,13 @@
       if (error) { $("#msg").textContent = "E-mail ou senha incorretos."; $("#msg").classList.add("on"); }
       else boot();
     };
-    $("#out").onclick = async () => { await sb.auth.signOut(); boot(); };
+    $("#out").onclick = async () => {
+      // "local" apaga a sessão neste aparelho mesmo se a internet falhar
+      await sb.auth.signOut({ scope: "local" }).catch(() => {});
+      $("#pw").value = "";
+      $("#msg").classList.remove("on");
+      boot();
+    };
 
     document.querySelectorAll("[data-t]").forEach(b => b.onclick = () => show(b.dataset.t));
     function show(t) {
