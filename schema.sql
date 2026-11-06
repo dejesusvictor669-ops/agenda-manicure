@@ -71,5 +71,5 @@ revoke all on function anonimizar_antigos() from public, anon, authenticated;
 
 -- Dados iniciais (edite) e ADMIN: crie o usuário da sua mãe em Authentication > Users, depois:
 -- insert into admins(user_id) select id from auth.users where email='EMAIL_DELA';
-insert into services(name,price_cents,duration_min) values ('Mão',3000,60),('Pé',3500,60),('Pé e mão',6000,120),('Unha de gel',12000,120);
+insert into services(name,price_cents,duration_min) values ('Mão',3500,60),('Pé',3500,60),('Mão e Pé Tradicional',6000,120),('Alongamento em Gel',10000,180),('Esmaltação em Gel',6000,120),('Blindagem',6000,120),('Esmaltação Comum',1000,20),('Manutenção',8000,120);
 insert into weekly_hours(weekday,at_time) select d,t::time from generate_series(2,6) d, unnest(array['09:00','10:30','13:00','14:30']) t;
