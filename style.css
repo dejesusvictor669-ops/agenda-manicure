@@ -379,6 +379,7 @@ input:focus { border-color: var(--plum); outline: none; }
 .gallery .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 14px 0; }
 .gallery img {
   width: 100%;
+  height: auto;
   aspect-ratio: 1;
   object-fit: cover;
   border-radius: var(--radius);
