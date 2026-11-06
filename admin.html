@@ -1,0 +1,43 @@
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="robots" content="noindex">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>Painel</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;700&family=DM+Serif+Display&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css"></head><body><main>
+<h1>Painel</h1>
+<form id="login"><input type="email" id="em" placeholder="E-mail" autocomplete="username"><input type="password" id="pw" placeholder="Senha" autocomplete="current-password"><div id="msg" class="msg" role="alert"></div><button class="btn">Entrar</button></form>
+<div id="app" hidden>
+<div class="tabs"><button class="btn sm" data-t="ag">Agenda</button><button class="btn sm ghost" data-t="hr">Horários</button><button class="btn sm ghost" data-t="sv">Serviços</button><button class="btn sm ghost" id="out">Sair</button></div>
+<section id="ag"></section><section id="hr" hidden></section><section id="sv" hidden></section></div>
+</main><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="config.js"></script><script>
+const DIAS=["Domingo","Segunda","Terça","Quarta","Quinta","Sexta","Sábado"];
+const el=(t,txt,c)=>{const e=document.createElement(t);if(txt!=null)e.textContent=txt;if(c)e.className=c;return e};
+const btn=(t,f,c="ghost")=>{const b=el("button",t,"btn sm "+c);b.type="button";b.onclick=f;return b};
+async function boot(){const{data:{session}}=await sb.auth.getSession();$("#login").hidden=!!session;$("#app").hidden=!session;if(session)show("ag")}
+$("#login").onsubmit=async e=>{e.preventDefault();const{error}=await sb.auth.signInWithPassword({email:$("#em").value,password:$("#pw").value});
+ if(error){$("#msg").textContent="E-mail ou senha incorretos.";$("#msg").classList.add("on")}else boot()};
+$("#out").onclick=async()=>{await sb.auth.signOut();boot()};
+document.querySelectorAll("[data-t]").forEach(b=>b.onclick=()=>show(b.dataset.t));
+function show(t){["ag","hr","sv"].forEach(i=>$("#"+i).hidden=i!==t);({ag,hr,sv})[t]()}
+async function ag(){const s=$("#ag");s.textContent="";const{data,error}=await sb.from("bookings").select("*,services(name)").in("status",["pendente","confirmado"]).order("day").order("at_time");
+ if(error||!data.length){s.append(el("p","Nenhum agendamento em aberto.","sub"));return}
+ data.forEach(b=>{const c=el("div",null,"card");c.append(el("b",`${fmtDay(b.day)} ${b.at_time.slice(0,5)} · ${b.services.name}`),el("div",`${b.client_name} · ${b.client_phone} · ${b.status}`));
+  const up=(st)=>async()=>{await sb.from("bookings").update({status:st}).eq("id",b.id);ag()};
+  if(b.status==="pendente")c.append(btn("Confirmar",up("confirmado"),""));
+  c.append(btn("Atendido",up("atendido")),btn("Remarcar",async()=>{const d=prompt("Nova data (AAAA-MM-DD)",b.day);const h=prompt("Novo horário (HH:MM)",b.at_time.slice(0,5));if(!d||!h)return;
+    const{error}=await sb.from("bookings").update({day:d,at_time:h}).eq("id",b.id);if(error)alert("Horário já ocupado ou inválido.");ag()}),
+   btn("Cancelar",up("cancelado")),btn("Excluir",async()=>{if(confirm("Excluir definitivamente?")){await sb.from("bookings").delete().eq("id",b.id);ag()}}));
+  s.append(c)})}
+async function hr(){const s=$("#hr");s.textContent="";const{data:w}=await sb.from("weekly_hours").select("*").order("at_time");
+ DIAS.forEach((n,d)=>{const c=el("div",null,"card");c.append(el("b",n+" "));(w||[]).filter(x=>x.weekday===d).forEach(x=>c.append(btn(x.at_time.slice(0,5)+" ✕",async()=>{await sb.from("weekly_hours").delete().match({weekday:d,at_time:x.at_time});hr()})));
+  const i=el("input");i.type="time";c.append(i,btn("Adicionar",async()=>{if(i.value){await sb.from("weekly_hours").insert({weekday:d,at_time:i.value});hr()}},""));s.append(c)});
+ s.append(el("h2","Dias sem atendimento"));const{data:o}=await sb.from("days_off").select("*").order("day");
+ (o||[]).forEach(x=>s.append(btn(fmtDay(x.day)+" ✕",async()=>{await sb.from("days_off").delete().eq("day",x.day);hr()})));
+ const i=el("input");i.type="date";s.append(i,btn("Bloquear dia",async()=>{if(i.value){await sb.from("days_off").upsert({day:i.value});hr()}},""))}
+async function sv(){const s=$("#sv");s.textContent="";const{data}=await sb.from("services").select("*").order("id");
+ (data||[]).forEach(x=>{const c=el("div",null,"card"),n=el("input"),p=el("input");n.type="text";n.value=x.name;p.type="text";p.value=(x.price_cents/100).toFixed(2);p.inputMode="decimal";
+  c.append(n,p,btn("Salvar",async()=>{await sb.from("services").update({name:n.value.trim(),price_cents:Math.round(parseFloat(p.value.replace(",","."))*100)}).eq("id",x.id);sv()},""),
+   btn(x.active?"Ocultar":"Mostrar",async()=>{await sb.from("services").update({active:!x.active}).eq("id",x.id);sv()}));s.append(c)});
+ const n=el("input"),p=el("input");n.type="text";n.placeholder="Novo serviço";p.type="text";p.placeholder="Preço (ex.: 45,00)";
+ s.append(n,p,btn("Adicionar",async()=>{await sb.from("services").insert({name:n.value.trim(),price_cents:Math.round(parseFloat(p.value.replace(",","."))*100)});sv()},""))}
+boot();
+</script></body></html>

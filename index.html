@@ -1,0 +1,45 @@
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>Agende seu horário</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;700&family=DM+Serif+Display&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css"></head><body><main>
+<h1>Agende seu horário</h1><p class="sub">Escolha o serviço, o dia e o horário. A confirmação final é feita pelo WhatsApp.</p>
+<h2>Serviço</h2><div id="services" role="radiogroup" aria-label="Serviço"></div>
+<h2>Data</h2><input type="date" id="day" aria-label="Data">
+<div id="slots" class="slots" aria-live="polite"></div>
+<h2>Seus dados</h2>
+<input type="text" id="name" placeholder="Seu nome" maxlength="80" autocomplete="name">
+<input type="tel" id="phone" placeholder="Seu WhatsApp com DDD" inputmode="numeric" autocomplete="tel">
+<label class="row legal"><input type="checkbox" id="consent"> <span>Concordo que meu nome e WhatsApp sejam usados apenas para organizar meu atendimento. Dados de atendimentos antigos são anonimizados após 6 meses. Para apagar seus dados antes, peça pelo WhatsApp.</span></label>
+<div id="msg" class="msg" role="alert"></div>
+<button class="btn" id="go" disabled>Agendar pelo WhatsApp</button>
+</main><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="config.js"></script><script>
+let svc=null,time=null,svcs=[];
+const iso=d=>d.toISOString().slice(0,10);
+const today=new Date(Date.now()-3*3600e3);const max=new Date(today.getTime()+60*864e5);
+$("#day").min=iso(today);$("#day").max=iso(max);
+function msg(t){const m=$("#msg");m.textContent=t||"";m.classList.toggle("on",!!t)}
+function ready(){$("#go").disabled=!(svc&&time&&$("#name").value.trim().length>1&&$("#phone").value.replace(/\D/g,"").length>=10&&$("#consent").checked)}
+async function loadServices(){const{data}=await sb.from("services").select("*").order("id");svcs=data||[];
+ const box=$("#services");box.textContent="";
+ svcs.forEach(s=>{const l=document.createElement("label");l.className="opt";
+  const i=document.createElement("input");i.type="radio";i.name="s";i.onchange=()=>{svc=s.id;ready()};
+  const a=document.createElement("span");a.textContent=s.name;const p=document.createElement("span");p.className="price";p.textContent=brl(s.price_cents);
+  l.append(i,a,p);box.append(l)})}
+async function loadSlots(){time=null;ready();const box=$("#slots");box.textContent="";const d=$("#day").value;if(!d)return;
+ const{data,error}=await sb.rpc("available_slots",{p_day:d});
+ if(error||!data.length){box.textContent="Sem horários livres neste dia. Escolha outra data.";return}
+ data.forEach(r=>{const b=document.createElement("button");b.type="button";b.className="slot";b.textContent=r.at_time.slice(0,5);b.setAttribute("aria-pressed","false");
+  b.onclick=()=>{box.querySelectorAll(".slot").forEach(x=>x.setAttribute("aria-pressed","false"));b.setAttribute("aria-pressed","true");time=r.at_time;ready()};box.append(b)})}
+$("#day").onchange=loadSlots;["name","phone","consent"].forEach(i=>$("#"+i).addEventListener("input",ready));
+$("#go").onclick=async()=>{msg("");$("#go").disabled=true;
+ const name=$("#name").value.trim(),phone=$("#phone").value.replace(/\D/g,""),day=$("#day").value;
+ const{error}=await sb.rpc("create_booking",{p_service:svc,p_day:day,p_time:time,p_name:name,p_phone:phone,p_consent:$("#consent").checked});
+ if(error){const m=error.message||"";
+  msg(m.includes("slot_taken")?"Esse horário acabou de ser ocupado. Escolha outro dia ou horário.":m.includes("too_many")?"Você já tem agendamentos pendentes. Aguarde a confirmação pelo WhatsApp.":"Não foi possível agendar. Confira os dados e tente de novo.");
+  if(m.includes("slot_taken"))loadSlots();ready();return}
+ const s=svcs.find(x=>x.id===svc);
+ const t=`Olá! Agendei pelo site: ${s.name}, ${fmtDay(day)} às ${time.slice(0,5)}. Meu nome é ${name}.`;
+ location.href=`https://wa.me/${WHATSAPP}?text=${encodeURIComponent(t)}`};
+loadServices();
+</script></body></html>

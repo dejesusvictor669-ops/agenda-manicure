@@ -1,0 +1,20 @@
+:root{--bg:#F4EFF3;--ink:#2A1730;--plum:#4B2A55;--rose:#B8456B;--line:#DCCFDB;--card:#fff}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 "DM Sans",system-ui,sans-serif}
+main{max-width:520px;margin:0 auto;padding:28px 18px 60px}
+h1,h2{font-family:"DM Serif Display",Georgia,serif;font-weight:400;color:var(--plum);margin:0 0 6px}
+h1{font-size:2.3rem;line-height:1.1}h2{font-size:1.35rem;margin-top:30px}
+p.sub{margin:0 0 8px;color:#6b5670}
+.opt{display:flex;justify-content:space-between;gap:12px;padding:14px;border:1.5px solid var(--line);background:var(--card);border-radius:10px;margin:8px 0;cursor:pointer}
+.opt:has(input:checked){border-color:var(--rose);background:#fbeef3}.opt input{position:absolute;opacity:0}
+.opt:has(input:focus-visible),button:focus-visible,input:focus-visible{outline:3px solid var(--rose);outline-offset:2px}
+.price{font-weight:700;color:var(--plum)}
+input[type=date],input[type=text],input[type=tel],input[type=email],input[type=password],input[type=time]{width:100%;padding:13px;border:1.5px solid var(--line);border-radius:10px;font:inherit;background:#fff;margin:6px 0}
+.slots{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.slot{padding:11px 16px;border:1.5px solid var(--plum);border-radius:999px;background:none;color:var(--plum);font:inherit;cursor:pointer}
+.slot[aria-pressed=true]{background:var(--plum);color:#fff}
+.btn{width:100%;padding:15px;border:0;border-radius:10px;background:var(--rose);color:#fff;font:700 1rem inherit;font-family:inherit;cursor:pointer;margin-top:16px}
+.btn:disabled{opacity:.5}.sm{padding:8px 12px;width:auto;margin:2px;font-size:.85rem}.ghost{background:none;color:var(--plum);border:1.5px solid var(--line)}
+.msg{padding:12px;border-radius:10px;margin:12px 0;background:#fff3cd;display:none}.msg.on{display:block}
+.legal{font-size:.85rem;color:#6b5670}.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.card{background:var(--card);border:1.5px solid var(--line);border-radius:10px;padding:12px;margin:8px 0}
+.tabs{display:flex;gap:6px;margin:16px 0}.tabs button{flex:1}
