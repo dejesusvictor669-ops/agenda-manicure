@@ -47,7 +47,7 @@ declare b record; n int := 0; label text;
 begin
   if not coalesce((select enabled from reminder_settings where id = 1), false) then return 0; end if;
   for b in
-    select bk.id, bk.at_time, bk.client_name, bk.client_phone, bk.reminded_60, s.name as svc,
+    select bk.id, bk.at_time, bk.client_name, bk.reminded_60, s.name as svc,
            extract(epoch from (((bk.day + bk.at_time) at time zone 'America/Sao_Paulo') - now())) / 60 as mins
     from bookings bk join services s on s.id = bk.service_id
     where (bk.status = 'confirmado' or (bk.status = 'pendente' and bk.created_at > now() - interval '12 hours'))
@@ -63,9 +63,9 @@ begin
     else
       continue;
     end if;
-    perform send_whatsapp(format(E'⏰ Lembrete: atendimento em %s (%s)\n%s · %s\nWhatsApp da cliente: %s',
-      label, to_char(b.at_time, 'HH24:MI'), b.client_name, b.svc,
-      regexp_replace(b.client_phone, '^(\d{2})(\d{4,5})(\d{4})$', '(\1) \2-\3')));
+    -- LGPD: só o primeiro nome vai para o CallMeBot (sem telefone)
+    perform send_whatsapp(format(E'⏰ Lembrete: atendimento em %s (%s)\n%s · %s',
+      label, to_char(b.at_time, 'HH24:MI'), split_part(trim(b.client_name), ' ', 1), b.svc));
     n := n + 1;
   end loop;
   return n;
@@ -92,3 +92,6 @@ revoke all on function public.test_reminder(), public.reminder_status(bigint) fr
 grant execute on function public.test_reminder(), public.reminder_status(bigint) to authenticated;
 
 select cron.schedule('lembretes-atendimento', '* * * * *', 'select public.send_reminders()');
+
+-- LGPD: anonimiza atendimentos antigos todo dia às 3h (Brasília)
+select cron.schedule('anonimizar-antigos', '0 6 * * *', 'select public.anonimizar_antigos()');

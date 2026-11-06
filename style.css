@@ -404,3 +404,10 @@ input:focus { border-color: var(--plum); outline: none; }
 .guide li { margin: 4px 0; }
 .guide a { color: var(--rose); font-weight: 700; }
 #lb .msg { margin: 12px 0 0; }
+
+/* ---------- Política de privacidade ---------- */
+.legal-page { max-width: 680px; }
+.legal-page p, .legal-page li { color: var(--ink); line-height: 1.65; }
+.legal-page ul { padding-left: 20px; }
+.legal-page a, .legal a, footer a:not(.admin-link) { color: var(--rose); font-weight: 700; }
+.back { display: inline-block; margin-bottom: 18px; text-decoration: none; }
