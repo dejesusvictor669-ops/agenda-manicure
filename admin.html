@@ -39,10 +39,12 @@
         <button role="tab" data-t="ag">Agenda</button>
         <button role="tab" data-t="hr">Horários</button>
         <button role="tab" data-t="sv">Serviços</button>
+        <button role="tab" data-t="lb">Avisos</button>
       </div>
       <section id="ag"></section>
       <section id="hr" hidden></section>
       <section id="sv" hidden></section>
+      <section id="lb" hidden></section>
     </div>
   </main>
 
@@ -83,9 +85,9 @@
 
     document.querySelectorAll("[data-t]").forEach(b => b.onclick = () => show(b.dataset.t));
     function show(t) {
-      ["ag", "hr", "sv"].forEach(i => $("#" + i).hidden = i !== t);
+      ["ag", "hr", "sv", "lb"].forEach(i => $("#" + i).hidden = i !== t);
       document.querySelectorAll("[data-t]").forEach(b => b.setAttribute("aria-selected", b.dataset.t === t));
-      ({ ag, hr, sv })[t]();
+      ({ ag, hr, sv, lb })[t]();
     }
 
     // ---------- Agenda ----------
@@ -217,6 +219,71 @@
         await sb.from("services").insert({ name: n.value.trim(), price_cents: toCents(p.value), duration_min: parseInt(m.value) || 60 });
         sv();
       }, ""));
+      s.append(c);
+    }
+
+    // ---------- Avisos (lembretes no WhatsApp) ----------
+    async function lb() {
+      const s = $("#lb");
+      const { data: cfg, error } = await sb.from("reminder_settings").select("*").eq("id", 1).single();
+      s.textContent = "";
+      if (error) { s.append(empty("Não foi possível carregar os avisos.")); return; }
+      s.append(el("p", "Receba no seu WhatsApp um aviso 1 hora e 30 minutos antes de cada atendimento.", "sub"));
+
+      // Passo a passo para pegar a chave
+      const guia = el("div", null, "card");
+      guia.append(el("b", "Como ativar (só uma vez)"));
+      const ol = el("ol", null, "guide");
+      const li1 = el("li", "Abra a ");
+      const a = el("a", "página do CallMeBot");
+      a.href = "https://www.callmebot.com/blog/free-api-whatsapp-messages/"; a.target = "_blank"; a.rel = "noopener";
+      li1.append(a, " e siga o passo 1: salve o número deles nos contatos e mande pelo WhatsApp a mensagem que aparece lá.");
+      ol.append(li1,
+        el("li", "Você vai receber uma resposta com a sua apikey (um número)."),
+        el("li", "Cole a apikey abaixo, ligue os avisos, salve e toque em \"Enviar teste\"."));
+      guia.append(ol);
+      s.append(guia);
+
+      const c = el("div", null, "card");
+      const ph = input("tel", cfg.phone, "+5531999999999");
+      const key = input("text", cfg.apikey, "Ex.: 1234567");
+      key.inputMode = "numeric"; key.autocomplete = "off";
+      const on = el("input"); on.type = "checkbox"; on.checked = cfg.enabled;
+      const toggle = el("label", null, "legal");
+      toggle.append(on, el("span", "Avisos ligados"));
+      const status = el("div", null, "msg");
+      const say = (t, ok) => { status.textContent = t; status.classList.add("on"); status.style.background = ok ? "var(--ok-soft)" : ""; status.style.color = ok ? "var(--ok)" : ""; };
+
+      const salvar = async () => {
+        const phone = "+" + ph.value.replace(/\D/g, "");
+        const { error } = await sb.from("reminder_settings").update({ phone, apikey: key.value.trim(), enabled: on.checked }).eq("id", 1);
+        if (error) { say("Não foi possível salvar."); return false; }
+        ph.value = phone;
+        return true;
+      };
+
+      const acoes = el("div", null, "row");
+      acoes.append(
+        btn("Salvar", async () => { if (await salvar()) say(on.checked ? "Salvo! Os avisos estão ligados." : "Salvo. Os avisos estão desligados.", true); }, ""),
+        btn("Enviar teste", async () => {
+          if (!key.value.trim()) { say("Cole a apikey antes de testar."); return; }
+          if (!(await salvar())) return;
+          say("Enviando…", true);
+          const { data: id, error } = await sb.rpc("test_reminder");
+          if (error || !id) { say("Não foi possível enviar. Confira o número e a apikey."); return; }
+          for (let k = 0; k < 8; k++) {
+            await new Promise(r => setTimeout(r, 1500));
+            const { data: r } = await sb.rpc("reminder_status", { p_id: id });
+            if (r && r !== "aguardando") {
+              if (r.startsWith("200") && !/error|invalid|apikey is not/i.test(r)) say("Mensagem de teste enviada! Confira seu WhatsApp.", true);
+              else say("O CallMeBot recusou: confira o número e a apikey.");
+              return;
+            }
+          }
+          say("Enviado, mas sem confirmação. Confira seu WhatsApp em alguns minutos.", true);
+        })
+      );
+      c.append(field("Seu WhatsApp (com +55 e DDD)", ph), field("apikey do CallMeBot", key), toggle, acoes, status);
       s.append(c);
     }
 

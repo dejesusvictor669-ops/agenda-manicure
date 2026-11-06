@@ -17,7 +17,7 @@ Agendamento online para manicure: a cliente escolhe serviço, dia e horário, e 
 
 ## Configuração
 
-1. Crie um projeto no Supabase e rode `schema.sql` no SQL Editor.
+1. Crie um projeto no Supabase e rode `schema.sql` e depois `lembretes.sql` no SQL Editor.
 2. Crie o usuário da profissional em **Authentication › Users** e torne-o administrador:
    ```sql
    insert into admins(user_id) select id from auth.users where email='EMAIL_DELA';

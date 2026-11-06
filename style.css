@@ -398,3 +398,9 @@ input:focus { border-color: var(--plum); outline: none; }
 }
 .btn.insta { background: none; color: var(--rose); border: 1.5px solid var(--rose); }
 .btn.insta:hover { background: var(--rose-soft); }
+
+/* ---------- Avisos ---------- */
+.guide { margin: 8px 0 0; padding-left: 20px; color: var(--muted); font-size: .92rem; }
+.guide li { margin: 4px 0; }
+.guide a { color: var(--rose); font-weight: 700; }
+#lb .msg { margin: 12px 0 0; }
