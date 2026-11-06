@@ -26,6 +26,7 @@ Agendamento online para manicure: a cliente escolhe serviço, dia e horário, e 
    - `SUPABASE_URL` e `SUPABASE_ANON_KEY` (chave **anon**, nunca a `service_role`)
    - `WHATSAPP`: número com DDI e DDD, só dígitos (ex.: `5511987654321`)
    - `NOME_ESTUDIO`: nome exibido no topo das páginas
+   - `LOGO`: coloque a imagem da logo na pasta (ex.: `logo.png`) e informe o nome do arquivo
 4. Publique a pasta na Vercel.
 
 ## Rodar localmente

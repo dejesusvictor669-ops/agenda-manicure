@@ -16,7 +16,8 @@
 </head>
 <body>
   <header class="hero">
-    <div class="brand"><span class="logo" aria-hidden="true">✦</span><span class="brand-name"></span></div>
+    <img class="logo hero-logo" src="favicon.svg" alt="" width="84" height="84">
+    <div class="brand"><span class="brand-name"></span></div>
     <h1>Agende seu horário</h1>
     <p class="sub">Escolha o serviço, o dia e o horário. Leva menos de um minuto e a confirmação chega pelo WhatsApp.</p>
   </header>
@@ -60,7 +61,10 @@
     </div>
   </main>
 
-  <footer><span class="brand-name"></span> · Agendamento online</footer>
+  <footer>
+    <span class="brand-name"></span> · Agendamento online
+    <a class="admin-link" href="/admin">Área da profissional</a>
+  </footer>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
   <script src="config.js"></script>
@@ -71,8 +75,6 @@
     const DIAS_A_FRENTE = 30;
 
     let svc = null, day = null, time = null, svcs = [], slotsReq = 0;
-
-    document.querySelectorAll(".brand-name").forEach(e => e.textContent = NOME_ESTUDIO);
 
     const dur = m => m % 60 ? `${Math.floor(m / 60) ? Math.floor(m / 60) + "h" : ""}${m % 60}min` : `${m / 60}h`;
     const dowOf = iso => new Date(iso + "T12:00:00Z").getUTCDay();

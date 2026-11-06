@@ -15,14 +15,15 @@
 <body class="admin">
   <header class="topbar">
     <div class="inner">
-      <div class="brand"><span class="logo" aria-hidden="true">✦</span><span class="brand-name"></span></div>
+      <a class="brand" href="/"><img class="logo" src="favicon.svg" alt="" width="34" height="34"><span class="brand-name"></span></a>
       <button class="btn sm ghost" id="out" hidden>Sair</button>
     </div>
   </header>
 
   <main>
     <form id="login" class="login" hidden>
-      <h1>Painel</h1>
+      <img class="logo login-logo" src="favicon.svg" alt="" width="64" height="64">
+      <h1>Área da profissional</h1>
       <p class="sub">Entre para gerenciar a agenda.</p>
       <label class="field" for="em">E-mail</label>
       <input type="email" id="em" autocomplete="username" required>
@@ -56,8 +57,6 @@
     const empty = t => el("p", t, "empty");
     const toCents = v => Math.round(parseFloat(String(v).replace(",", ".")) * 100);
     const fmtPhone = p => p.length === 11 ? `(${p.slice(0, 2)}) ${p.slice(2, 7)}-${p.slice(7)}` : `(${p.slice(0, 2)}) ${p.slice(2, 6)}-${p.slice(6)}`;
-
-    document.querySelectorAll(".brand-name").forEach(e => e.textContent = NOME_ESTUDIO);
 
     async function boot() {
       const { data: { session } } = await sb.auth.getSession();

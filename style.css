@@ -45,18 +45,25 @@ body {
   letter-spacing: .08em;
   text-transform: uppercase;
   font-size: .78rem;
-  opacity: .9;
   margin-bottom: 18px;
+  color: inherit;
+  text-decoration: none;
 }
-.brand .logo {
-  display: grid;
-  place-items: center;
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, .18);
-  font-size: .95rem;
+.hero .brand { display: block; letter-spacing: .14em; opacity: .9; }
+
+/* Logo: funciona com SVG ou foto (PNG/JPG), sempre redonda */
+.logo { display: block; border-radius: 50%; object-fit: cover; background: #fff; }
+.hero-logo {
+  width: 84px;
+  height: 84px;
+  margin: 0 auto 12px;
+  border: 3px solid rgba(255, 255, 255, .7);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, .18);
 }
+.brand .logo { width: 34px; height: 34px; border: 2px solid rgba(255, 255, 255, .5); }
+.login-logo { width: 64px; height: 64px; margin: 0 auto 14px; }
+.login h1, .login .sub { text-align: center; }
+.login h1 { font-size: 1.8rem; }
 
 main {
   max-width: 560px;
@@ -71,6 +78,17 @@ footer {
   font-size: .82rem;
   padding: 0 16px 32px;
 }
+.admin-link {
+  display: table;
+  margin: 12px auto 0;
+  padding: 8px 14px;
+  color: var(--plum);
+  font-weight: 700;
+  text-decoration: none;
+  border: 1.5px solid var(--line);
+  border-radius: 999px;
+}
+.admin-link::before { content: "🔒 "; }
 
 /* ---------- Tipografia ---------- */
 h1, h2, h3 {
