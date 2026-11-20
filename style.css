@@ -411,3 +411,32 @@ input:focus { border-color: var(--plum); outline: none; }
 .legal-page ul { padding-left: 20px; }
 .legal-page a, .legal a, footer a:not(.admin-link) { color: var(--rose); font-weight: 700; }
 .back { display: inline-block; margin-bottom: 18px; text-decoration: none; }
+
+/* ---------- Calendário do painel ---------- */
+.tabs { overflow-x: auto; scrollbar-width: none; }
+.tabs button { flex: 1 0 auto; padding: 10px 6px; font-size: .82rem; white-space: nowrap; }
+.cal-nav { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.cal-nav b { flex: 1; text-align: center; font-family: "Cormorant Garamond", Georgia, serif; font-size: 1.35rem; color: var(--plum); }
+.cal-nav .btn { min-width: 40px; }
+.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow); padding: 10px; }
+.cal-dow { text-align: center; font-size: .72rem; font-weight: 700; color: var(--muted); padding: 2px 0 6px; }
+.cal-day {
+  aspect-ratio: 1; border: 1.5px solid transparent; border-radius: 10px; background: var(--bg);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  font: inherit; color: var(--ink); cursor: pointer; padding: 0;
+}
+.cal-day .n { font-weight: 700; font-size: .92rem; }
+.cal-day .dots { display: flex; gap: 3px; min-height: 16px; }
+.cal-day .dots i, .cal-legend i { font-style: normal; font-size: .64rem; font-weight: 700; min-width: 16px; height: 16px; line-height: 16px; border-radius: 99px; text-align: center; color: #fff; padding: 0 4px; }
+.cal-day .dots .open, .cal-legend .open { background: var(--rose); }
+.cal-day .dots .done, .cal-legend .done { background: #B9A99F; }
+.cal-day.today { border-color: var(--rose); }
+.cal-day.sel { background: var(--plum); color: #fff; }
+.cal-day.off { background: repeating-linear-gradient(135deg, var(--bg) 0 6px, var(--line) 6px 8px); }
+.cal-day.sel.off { background: var(--plum); }
+.cal-legend { font-size: .78rem; margin: 8px 2px 0; }
+.cal-legend i { display: inline-block; min-width: 10px; height: 10px; padding: 0; vertical-align: -1px; }
+.cal-legend .offk { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -2px; background: repeating-linear-gradient(135deg, var(--bg) 0 3px, var(--line) 3px 5px); border: 1px solid var(--line); }
+.booking.closed { opacity: .7; }
+.badge.atendido { background: #EEE7E2; color: #6B5A50; }
+.badge.cancelado, .badge.expirado { background: #F6E3E3; color: #A3243B; }

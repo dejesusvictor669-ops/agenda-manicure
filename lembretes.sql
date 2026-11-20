@@ -95,3 +95,54 @@ select cron.schedule('lembretes-atendimento', '* * * * *', 'select public.send_r
 
 -- LGPD: anonimiza atendimentos antigos todo dia às 3h (Brasília)
 select cron.schedule('anonimizar-antigos', '0 6 * * *', 'select public.anonimizar_antigos()');
+
+-- ===== AVISOS PELO TELEGRAM (substitui o CallMeBot) =====
+alter table public.reminder_settings
+  add column if not exists tg_token text not null default '',
+  add column if not exists tg_chat_id text not null default '';
+
+create or replace function public.send_whatsapp(p_text text) returns bigint
+language plpgsql security definer set search_path=public as $$
+declare s reminder_settings;
+begin
+  select * into s from reminder_settings where id = 1;
+  if s.tg_token <> '' and s.tg_chat_id <> '' then
+    return net.http_post(
+      url := 'https://api.telegram.org/bot' || s.tg_token || '/sendMessage',
+      body := jsonb_build_object('chat_id', s.tg_chat_id, 'text', p_text),
+      headers := '{"Content-Type": "application/json"}'::jsonb);
+  end if;
+  if s.phone = '' or s.apikey = '' then return null; end if;
+  return net.http_get(
+    url := 'https://api.callmebot.com/whatsapp.php',
+    params := jsonb_build_object('phone', s.phone, 'text', p_text, 'apikey', s.apikey));
+end $$;
+revoke all on function public.send_whatsapp(text) from public, anon, authenticated;
+
+create or replace function public.tg_connect() returns bigint
+language plpgsql security definer set search_path=public as $$
+declare t text;
+begin
+  if not is_admin() then raise exception 'not_admin'; end if;
+  select tg_token into t from reminder_settings where id = 1;
+  if coalesce(t, '') = '' then raise exception 'sem_token'; end if;
+  return net.http_get(url := 'https://api.telegram.org/bot' || t || '/getUpdates');
+end $$;
+
+create or replace function public.tg_finish(p_id bigint) returns text
+language plpgsql security definer set search_path=public as $$
+declare r record; j jsonb; msg jsonb;
+begin
+  if not is_admin() then raise exception 'not_admin'; end if;
+  select status_code, content into r from net._http_response where id = p_id;
+  if not found then return 'aguardando'; end if;
+  if r.status_code <> 200 then return 'token_invalido'; end if;
+  j := r.content::jsonb;
+  select coalesce(e->'message', e->'my_chat_member') into msg
+    from jsonb_array_elements(j->'result') e order by (e->>'update_id')::bigint desc limit 1;
+  if msg is null then return 'sem_mensagem'; end if;
+  update reminder_settings set tg_chat_id = msg->'chat'->>'id', enabled = true where id = 1;
+  return 'ok:' || coalesce(msg->'chat'->>'first_name', msg->'from'->>'first_name', '');
+end $$;
+revoke all on function public.tg_connect(), public.tg_finish(bigint) from public, anon;
+grant execute on function public.tg_connect(), public.tg_finish(bigint) to authenticated;

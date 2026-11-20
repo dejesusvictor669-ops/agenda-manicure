@@ -37,11 +37,13 @@
     <div id="app" hidden>
       <div class="tabs" role="tablist">
         <button role="tab" data-t="ag">Agenda</button>
+        <button role="tab" data-t="cal">Calendário</button>
         <button role="tab" data-t="hr">Horários</button>
         <button role="tab" data-t="sv">Serviços</button>
         <button role="tab" data-t="lb">Avisos</button>
       </div>
       <section id="ag"></section>
+      <section id="cal" hidden></section>
       <section id="hr" hidden></section>
       <section id="sv" hidden></section>
       <section id="lb" hidden></section>
@@ -85,9 +87,9 @@
 
     document.querySelectorAll("[data-t]").forEach(b => b.onclick = () => show(b.dataset.t));
     function show(t) {
-      ["ag", "hr", "sv", "lb"].forEach(i => $("#" + i).hidden = i !== t);
+      ["ag", "cal", "hr", "sv", "lb"].forEach(i => $("#" + i).hidden = i !== t);
       document.querySelectorAll("[data-t]").forEach(b => b.setAttribute("aria-selected", b.dataset.t === t));
-      ({ ag, hr, sv, lb })[t]();
+      ({ ag, cal, hr, sv, lb })[t]();
     }
 
     // ---------- Agenda ----------
@@ -106,17 +108,28 @@
           const dow = new Date(b.day + "T12:00:00Z").getUTCDay();
           s.append(el("h3", `${DIAS[dow]}, ${fmtDay(b.day)}`));
         }
-        const c = el("div", null, "card booking");
-        const who = el("div", b.client_name, "who");
-        who.append(el("span", b.status, "badge " + b.status));
-        const meta = el("div", `${b.services.name} · `, "meta");
+        s.append(bookingCard(b, ag));
+      });
+    }
+
+    // Cartão de um agendamento (usado na Agenda e no Calendário)
+    const ABERTOS = ["pendente", "confirmado"];
+    function bookingCard(b, refresh) {
+      const c = el("div", null, "card booking" + (ABERTOS.includes(b.status) ? "" : " closed"));
+      const who = el("div", b.client_name, "who");
+      who.append(el("span", b.status, "badge " + b.status));
+      const meta = el("div", `${b.services ? b.services.name : "Serviço"} · `, "meta");
+      if (/^0+$/.test(b.client_phone)) meta.append("dados anonimizados");
+      else {
         const wa = el("a", fmtPhone(b.client_phone));
         wa.href = `https://wa.me/55${b.client_phone}`; wa.target = "_blank"; wa.rel = "noopener";
         meta.append(wa);
-        const info = el("div"); info.append(who, meta);
+      }
+      const info = el("div"); info.append(who, meta);
 
-        const up = st => async () => { await sb.from("bookings").update({ status: st }).eq("id", b.id); ag(); };
-        const actions = el("div", null, "actions");
+      const up = st => async () => { await sb.from("bookings").update({ status: st }).eq("id", b.id); refresh(); };
+      const actions = el("div", null, "actions");
+      if (ABERTOS.includes(b.status)) {
         if (b.status === "pendente") actions.append(btn("Confirmar", up("confirmado"), ""));
         actions.append(
           btn("Atendido", up("atendido")),
@@ -126,16 +139,80 @@
             if (!d || !h) return;
             const { error } = await sb.from("bookings").update({ day: d, at_time: h }).eq("id", b.id);
             if (error) alert("Horário já ocupado ou inválido.");
-            ag();
+            refresh();
           }),
-          btn("Cancelar", up("cancelado")),
-          btn("Excluir", async () => {
-            if (confirm("Excluir definitivamente?")) { await sb.from("bookings").delete().eq("id", b.id); ag(); }
-          }, "ghost danger")
+          btn("Cancelar", up("cancelado"))
         );
-        c.append(el("div", b.at_time.slice(0, 5), "time"), info, actions);
-        s.append(c);
-      });
+      }
+      actions.append(btn("Excluir", async () => {
+        if (confirm("Excluir definitivamente?")) { await sb.from("bookings").delete().eq("id", b.id); refresh(); }
+      }, "ghost danger"));
+      c.append(el("div", b.at_time.slice(0, 5), "time"), info, actions);
+      return c;
+    }
+
+    // ---------- Calendário (qualquer mês, todos os atendimentos) ----------
+    const MESES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+    const hojeISO = () => new Date(Date.now() - 3 * 3600e3).toISOString().slice(0, 10);
+    const iso = (y, m, d) => `${y}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+    let calY = +hojeISO().slice(0, 4), calM = +hojeISO().slice(5, 7) - 1, calSel = hojeISO();
+
+    async function cal() {
+      const s = $("#cal");
+      const ini = iso(calY, calM, 1), nDias = new Date(Date.UTC(calY, calM + 1, 0)).getUTCDate(), fim = iso(calY, calM, nDias);
+      const [{ data, error }, { data: folgas }] = await Promise.all([
+        sb.from("bookings").select("*,services(name)").gte("day", ini).lte("day", fim).order("day").order("at_time"),
+        sb.from("days_off").select("day").gte("day", ini).lte("day", fim)
+      ]);
+      s.textContent = "";
+      if (error) { s.append(empty("Não foi possível carregar o calendário.")); return; }
+      const porDia = {};
+      (data || []).forEach(b => (porDia[b.day] = porDia[b.day] || []).push(b));
+      const off = new Set((folgas || []).map(f => f.day));
+
+      // Cabeçalho do mês
+      const nav = el("div", null, "cal-nav");
+      const mudar = d => () => { calM += d; if (calM < 0) { calM = 11; calY--; } if (calM > 11) { calM = 0; calY++; } cal(); };
+      nav.append(btn("‹", mudar(-1)), el("b", `${MESES[calM]} ${calY}`), btn("›", mudar(1)));
+      const hoje = btn("Hoje", () => { calY = +hojeISO().slice(0, 4); calM = +hojeISO().slice(5, 7) - 1; calSel = hojeISO(); cal(); });
+      nav.append(hoje);
+
+      // Grade
+      const grid = el("div", null, "cal-grid");
+      ["D", "S", "T", "Q", "Q", "S", "S"].forEach(d => grid.append(el("span", d, "cal-dow")));
+      const offset = new Date(Date.UTC(calY, calM, 1)).getUTCDay();
+      for (let i = 0; i < offset; i++) grid.append(el("span"));
+      for (let d = 1; d <= nDias; d++) {
+        const dia = iso(calY, calM, d), lista = porDia[dia] || [];
+        const abertos = lista.filter(b => ABERTOS.includes(b.status)).length;
+        const outros = lista.length - abertos;
+        const cell = el("button", null, "cal-day");
+        cell.type = "button";
+        if (dia === hojeISO()) cell.classList.add("today");
+        if (dia === calSel) cell.classList.add("sel");
+        if (off.has(dia)) cell.classList.add("off");
+        cell.append(el("span", String(d), "n"));
+        const dots = el("span", null, "dots");
+        if (abertos) dots.append(el("i", String(abertos), "open"));
+        if (outros) dots.append(el("i", String(outros), "done"));
+        cell.append(dots);
+        cell.onclick = () => { calSel = dia; cal(); };
+        grid.append(cell);
+      }
+
+      const legenda = el("p", null, "hint cal-legend");
+      legenda.innerHTML = '<i class="open"></i> em aberto &nbsp; <i class="done"></i> atendidos/cancelados &nbsp; <i class="offk"></i> folga';
+      s.append(nav, grid, legenda);
+
+      // Lista do dia escolhido
+      if (calSel.slice(0, 7) === ini.slice(0, 7)) {
+        const dow = new Date(calSel + "T12:00:00Z").getUTCDay();
+        s.append(el("h3", `${DIAS[dow]}, ${fmtDay(calSel)}`));
+        if (off.has(calSel)) s.append(el("p", "Dia bloqueado (sem atendimento).", "hint"));
+        const lista = porDia[calSel] || [];
+        if (!lista.length) s.append(empty("Nenhum atendimento neste dia."));
+        lista.forEach(b => s.append(bookingCard(b, cal)));
+      }
     }
 
     // ---------- Horários ----------
@@ -222,69 +299,92 @@
       s.append(c);
     }
 
-    // ---------- Avisos (lembretes no WhatsApp) ----------
+    // ---------- Avisos (lembretes no Telegram) ----------
     async function lb() {
       const s = $("#lb");
       const { data: cfg, error } = await sb.from("reminder_settings").select("*").eq("id", 1).single();
       s.textContent = "";
       if (error) { s.append(empty("Não foi possível carregar os avisos.")); return; }
-      s.append(el("p", "Receba no seu WhatsApp um aviso 1 hora e 30 minutos antes de cada atendimento.", "sub"));
+      const conectado = !!cfg.tg_chat_id;
+      s.append(el("p", "Receba no Telegram um aviso 1 hora e 30 minutos antes de cada atendimento.", "sub"));
 
-      // Passo a passo para pegar a chave
-      const guia = el("div", null, "card");
-      guia.append(el("b", "Como ativar (só uma vez)"));
-      const ol = el("ol", null, "guide");
-      const li1 = el("li", "Abra a ");
-      const a = el("a", "página do CallMeBot");
-      a.href = "https://www.callmebot.com/blog/free-api-whatsapp-messages/"; a.target = "_blank"; a.rel = "noopener";
-      li1.append(a, " e siga o passo 1: salve o número deles nos contatos e mande pelo WhatsApp a mensagem que aparece lá.");
-      ol.append(li1,
-        el("li", "Você vai receber uma resposta com a sua apikey (um número)."),
-        el("li", "Cole a apikey abaixo, ligue os avisos, salve e toque em \"Enviar teste\"."));
-      guia.append(ol);
-      s.append(guia);
-
-      const c = el("div", null, "card");
-      const ph = input("tel", cfg.phone, "+5531999999999");
-      const key = input("text", cfg.apikey, "Ex.: 1234567");
-      key.inputMode = "numeric"; key.autocomplete = "off";
-      const on = el("input"); on.type = "checkbox"; on.checked = cfg.enabled;
-      const toggle = el("label", null, "legal");
-      toggle.append(on, el("span", "Avisos ligados"));
       const status = el("div", null, "msg");
       const say = (t, ok) => { status.textContent = t; status.classList.add("on"); status.style.background = ok ? "var(--ok-soft)" : ""; status.style.color = ok ? "var(--ok)" : ""; };
+      const espera = ms => new Promise(r => setTimeout(r, ms));
+      // Pergunta ao banco o resultado de uma chamada ao Telegram (ela leva 1–3 s)
+      async function resultado(fn, id) {
+        for (let k = 0; k < 10; k++) {
+          await espera(1200);
+          const { data: r } = await sb.rpc(fn, { p_id: id });
+          if (r && r !== "aguardando") return r;
+        }
+        return "sem_resposta";
+      }
 
-      const salvar = async () => {
-        const phone = "+" + ph.value.replace(/\D/g, "");
-        const { error } = await sb.from("reminder_settings").update({ phone, apikey: key.value.trim(), enabled: on.checked }).eq("id", 1);
-        if (error) { say("Não foi possível salvar."); return false; }
-        ph.value = phone;
-        return true;
-      };
+      // Situação atual
+      const sit = el("div", null, "card");
+      sit.append(el("b", conectado ? "✅ Telegram conectado" : "Telegram ainda não conectado"));
+      if (conectado) {
+        const on = el("input"); on.type = "checkbox"; on.checked = cfg.enabled;
+        const toggle = el("label", null, "legal"); toggle.append(on, el("span", "Avisos ligados"));
+        on.onchange = async () => { await sb.from("reminder_settings").update({ enabled: on.checked }).eq("id", 1); say(on.checked ? "Avisos ligados." : "Avisos desligados.", true); };
+        const acoes = el("div", null, "row");
+        acoes.append(
+          btn("Enviar teste", async () => {
+            say("Enviando…", true);
+            const { data: id, error } = await sb.rpc("test_reminder");
+            if (error || !id) { say("Não foi possível enviar."); return; }
+            const r = await resultado("reminder_status", id);
+            if (r.startsWith("200")) say("Mensagem de teste enviada! Confira o Telegram.", true);
+            else say("O Telegram não aceitou o envio. Refaça a conexão abaixo.");
+          }, ""),
+          btn("Desconectar", async () => {
+            if (!confirm("Parar de receber os avisos no Telegram?")) return;
+            await sb.from("reminder_settings").update({ tg_chat_id: "", enabled: false }).eq("id", 1); lb();
+          }, "ghost danger")
+        );
+        sit.append(toggle, acoes);
+      }
+      sit.append(status);
+      s.append(sit);
 
-      const acoes = el("div", null, "row");
-      acoes.append(
-        btn("Salvar", async () => { if (await salvar()) say(on.checked ? "Salvo! Os avisos estão ligados." : "Salvo. Os avisos estão desligados.", true); }, ""),
-        btn("Enviar teste", async () => {
-          if (!key.value.trim()) { say("Cole a apikey antes de testar."); return; }
-          if (!(await salvar())) return;
-          say("Enviando…", true);
-          const { data: id, error } = await sb.rpc("test_reminder");
-          if (error || !id) { say("Não foi possível enviar. Confira o número e a apikey."); return; }
-          for (let k = 0; k < 8; k++) {
-            await new Promise(r => setTimeout(r, 1500));
-            const { data: r } = await sb.rpc("reminder_status", { p_id: id });
-            if (r && r !== "aguardando") {
-              if (r.startsWith("200") && !/error|invalid|apikey is not/i.test(r)) say("Mensagem de teste enviada! Confira seu WhatsApp.", true);
-              else say("O CallMeBot recusou: confira o número e a apikey.");
-              return;
-            }
-          }
-          say("Enviado, mas sem confirmação. Confira seu WhatsApp em alguns minutos.", true);
-        })
-      );
-      c.append(field("Seu WhatsApp (com +55 e DDD)", ph), field("apikey do CallMeBot", key), toggle, acoes, status);
-      s.append(c);
+      // Passo a passo para conectar (uma vez só)
+      const guia = el("div", null, "card");
+      guia.append(el("b", conectado ? "Conectar outro Telegram" : "Como conectar (só uma vez)"));
+      const ol = el("ol", null, "guide");
+      const li1 = el("li", "No Telegram, abra o ");
+      const bf = el("a", "@BotFather"); bf.href = "https://t.me/BotFather"; bf.target = "_blank"; bf.rel = "noopener";
+      li1.append(bf, ", mande /newbot e escolha um nome (ex.: Agenda Glauciane) e um usuário terminado em bot (ex.: agendaglauciane_bot).");
+      ol.append(li1,
+        el("li", "Ele responde com um token (uma linha longa com números e letras). Copie e cole abaixo."),
+        el("li", "Abra o seu robô novo no Telegram (pelo link que o BotFather mandou) e toque em Iniciar."),
+        el("li", "Volte aqui e toque em Conectar."));
+      guia.append(ol);
+
+      const tok = input("text", cfg.tg_token, "123456789:ABC...");
+      tok.autocomplete = "off"; tok.spellcheck = false;
+      const msgC = el("div", null, "msg");
+      const sayC = (t, ok) => { msgC.textContent = t; msgC.classList.add("on"); msgC.style.background = ok ? "var(--ok-soft)" : ""; msgC.style.color = ok ? "var(--ok)" : ""; };
+      const conectar = btn("Conectar", async () => {
+        const t = tok.value.trim();
+        if (!/^\d+:[\w-]{20,}$/.test(t)) { sayC("Esse token não parece certo. Copie a linha inteira que o BotFather mandou."); return; }
+        sayC("Conectando…", true);
+        await sb.from("reminder_settings").update({ tg_token: t }).eq("id", 1);
+        const { data: id, error } = await sb.rpc("tg_connect");
+        if (error || !id) { sayC("Não foi possível falar com o Telegram."); return; }
+        const r = await resultado("tg_finish", id);
+        if (r.startsWith("ok:")) {
+          sayC(`Conectado${r.slice(3) ? " com " + r.slice(3) : ""}! Enviando um teste…`, true);
+          const { data: tid } = await sb.rpc("test_reminder");
+          if (tid) await resultado("reminder_status", tid);
+          lb();
+        }
+        else if (r === "token_invalido") sayC("O Telegram não reconheceu esse token. Confira se copiou a linha inteira.");
+        else if (r === "sem_mensagem") sayC("Falta o passo 3: abra o seu robô no Telegram, toque em Iniciar e tente de novo.");
+        else sayC("O Telegram demorou a responder. Tente de novo em instantes.");
+      }, "");
+      guia.append(field("Token do robô", tok), conectar, msgC);
+      s.append(guia);
     }
 
     boot();
