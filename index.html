@@ -31,7 +31,7 @@
 
     <section class="step" id="step-day">
       <h2><span class="num">2</span>Dia</h2>
-      <div id="days" class="days" role="group" aria-label="Dia"></div>
+      <div id="days" class="client-cal" role="group" aria-label="Dia"></div>
     </section>
 
     <section class="step" id="step-time">
@@ -88,7 +88,6 @@
     const DOW = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
     const DOW_LONG = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
     const MES = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
-    const DIAS_A_FRENTE = 30;
 
     let svc = null, day = null, time = null, svcs = [], slotsReq = 0;
 
@@ -148,7 +147,7 @@
       svcs.forEach(s => {
         const l = document.createElement("label"); l.className = "opt";
         const i = document.createElement("input"); i.type = "radio"; i.name = "s";
-        i.onchange = () => { next(day ? "#step-time" : "#step-day"); svc = s.id; ready(); };
+        i.onchange = () => { next(day ? "#step-time" : "#step-day"); svc = s.id; if (day) loadSlots(); else ready(); };
         const info = document.createElement("span");
         const n = document.createElement("span"); n.className = "name"; n.textContent = s.name;
         const d = document.createElement("span"); d.className = "dur"; d.textContent = dur(s.duration_min);
@@ -159,28 +158,61 @@
       });
     }
 
-    function renderDays() {
+    // ---------- Calendário mensal (até 1 ano à frente) ----------
+    const MES_LONGO = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+    const isoDe = (y, m, d) => `${y}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+    let info = null, calY = 0, calM = 0;
+
+    async function renderDays() {
+      if (!info) {
+        const { data } = await sb.rpc("calendar_info");
+        const hoje = new Date(Date.now() - 3 * 3600e3).toISOString().slice(0, 10);
+        info = data || { hoje, limite: hoje, dias_semana: [0, 1, 2, 3, 4, 5, 6], folgas: [] };
+        info.folgas = new Set(info.folgas || []);
+        calY = +info.hoje.slice(0, 4); calM = +info.hoje.slice(5, 7) - 1;
+      }
       const box = $("#days");
-      const hoje = new Date(Date.now() - 3 * 3600e3); // horário de Brasília
-      for (let k = 0; k < DIAS_A_FRENTE; k++) {
-        const d = new Date(hoje.getTime() + k * 864e5);
-        const iso = d.toISOString().slice(0, 10);
+      box.textContent = "";
+
+      // Cabeçalho com setas (não volta antes do mês atual nem passa do limite)
+      const primeiro = isoDe(calY, calM, 1);
+      const nav = document.createElement("div"); nav.className = "cal-nav";
+      const seta = (txt, delta, ok) => {
+        const b = document.createElement("button"); b.type = "button"; b.className = "cal-arrow"; b.textContent = txt;
+        b.disabled = !ok; b.setAttribute("aria-label", delta < 0 ? "Mês anterior" : "Próximo mês");
+        b.onclick = () => { calM += delta; if (calM < 0) { calM = 11; calY--; } if (calM > 11) { calM = 0; calY++; } renderDays(); };
+        return b;
+      };
+      const titulo = document.createElement("b"); titulo.textContent = `${MES_LONGO[calM]} ${calY}`;
+      const proximo = calM === 11 ? isoDe(calY + 1, 0, 1) : isoDe(calY, calM + 1, 1);
+      nav.append(seta("‹", -1, primeiro.slice(0, 7) > info.hoje.slice(0, 7)), titulo,
+                 seta("›", 1, proximo <= info.limite));
+
+      // Grade do mês
+      const grid = document.createElement("div"); grid.className = "cal-grid";
+      ["D", "S", "T", "Q", "Q", "S", "S"].forEach(t => { const s = document.createElement("span"); s.className = "cal-dow"; s.textContent = t; grid.append(s); });
+      const offset = new Date(Date.UTC(calY, calM, 1)).getUTCDay();
+      for (let i = 0; i < offset; i++) grid.append(document.createElement("span"));
+      const nDias = new Date(Date.UTC(calY, calM + 1, 0)).getUTCDate();
+      for (let d = 1; d <= nDias; d++) {
+        const iso = isoDe(calY, calM, d), dow = new Date(iso + "T12:00:00Z").getUTCDay();
         const b = document.createElement("button");
-        b.type = "button"; b.className = "day"; b.setAttribute("aria-pressed", "false");
-        b.setAttribute("aria-label", `${DOW_LONG[d.getUTCDay()]}, ${fmtDay(iso)}`);
-        const top = document.createElement("small"); top.textContent = k === 0 ? "Hoje" : DOW[d.getUTCDay()];
-        const mid = document.createElement("strong"); mid.textContent = d.getUTCDate();
-        const bot = document.createElement("small"); bot.textContent = MES[d.getUTCMonth()];
-        b.append(top, mid, bot);
+        b.type = "button"; b.className = "cal-day"; b.textContent = d;
+        b.setAttribute("aria-label", `${DOW_LONG[dow]}, ${fmtDay(iso)}`);
+        b.setAttribute("aria-pressed", String(iso === day));
+        const fechado = iso < info.hoje || iso > info.limite || !info.dias_semana.includes(dow) || info.folgas.has(iso);
+        if (fechado) b.disabled = true;
+        if (iso === info.hoje) b.classList.add("today");
         b.onclick = () => {
-          box.querySelectorAll(".day").forEach(x => x.setAttribute("aria-pressed", "false"));
+          grid.querySelectorAll(".cal-day").forEach(x => x.setAttribute("aria-pressed", "false"));
           b.setAttribute("aria-pressed", "true");
           if (!day) next("#step-time");
           day = iso;
           loadSlots();
         };
-        box.append(b);
+        grid.append(b);
       }
+      box.append(nav, grid);
     }
 
     async function loadSlots() {
@@ -190,7 +222,8 @@
       if (!day) return;
       const req = ++slotsReq;
       hint.hidden = false; hint.textContent = "Buscando horários livres"; hint.classList.add("loading");
-      const { data, error } = await sb.rpc("available_slots", { p_day: day });
+      // Os horários dependem da duração do serviço escolhido
+      const { data, error } = await sb.rpc("available_slots", svc ? { p_day: day, p_service: svc } : { p_day: day });
       if (req !== slotsReq) return; // o usuário já trocou de dia
       hint.classList.remove("loading");
       if (error || !data.length) {

@@ -440,3 +440,14 @@ input:focus { border-color: var(--plum); outline: none; }
 .booking.closed { opacity: .7; }
 .badge.atendido { background: #EEE7E2; color: #6B5A50; }
 .badge.cancelado, .badge.expirado { background: #F6E3E3; color: #A3243B; }
+
+/* ---------- Calendário das clientes ---------- */
+.client-cal .cal-grid { box-shadow: none; padding: 0; background: none; }
+.client-cal .cal-day { font-weight: 700; font-size: .95rem; }
+.client-cal .cal-day:disabled { background: none; color: #C8BAB2; cursor: default; font-weight: 400; }
+.client-cal .cal-day[aria-pressed=true] { background: var(--plum); color: #fff; }
+.cal-arrow {
+  width: 40px; height: 40px; border-radius: 50%; border: 1.5px solid var(--line); background: #fff;
+  color: var(--plum); font: 700 1.2rem "DM Sans", sans-serif; cursor: pointer;
+}
+.cal-arrow:disabled { opacity: .3; cursor: default; }

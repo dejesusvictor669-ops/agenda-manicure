@@ -33,17 +33,39 @@ create policy admin_all on weekly_hours for all to authenticated using(is_admin(
 create policy admin_all on days_off for all to authenticated using(is_admin()) with check(is_admin());
 create policy public_read on services for select to anon using(active);
 
--- Horários livres: devolve só horas, nunca dados de clientes
-create function public.available_slots(p_day date) returns table(at_time time)
+-- Horários livres levando em conta a DURAÇÃO dos serviços.
+-- Um horário só aparece se o serviço escolhido cabe nele sem encostar em nenhum atendimento já marcado.
+-- Devolve só horas, nunca dados de clientes. As clientes podem marcar até 1 ano à frente.
+create function public.available_slots(p_day date, p_service int default null) returns table(at_time time)
 language sql stable security definer set search_path=public as $$
-  select w.at_time from weekly_hours w
+  with hoje as (select (now() at time zone 'America/Sao_Paulo') as agora),
+  dur as (select coalesce((select duration_min from services where id = p_service), 1) as minutos),
+  ocupado as (
+    select b.at_time as ini, b.at_time + make_interval(mins => s.duration_min) as fim
+    from bookings b join services s on s.id = b.service_id
+    where b.day = p_day
+      and (b.status = 'confirmado' or (b.status = 'pendente' and b.created_at > now() - interval '12 hours'))
+  )
+  select w.at_time from weekly_hours w, hoje, dur
   where w.weekday = extract(dow from p_day)::int
-    and p_day between (now() at time zone 'America/Sao_Paulo')::date and (now() at time zone 'America/Sao_Paulo')::date + 60
-    and (p_day > (now() at time zone 'America/Sao_Paulo')::date or w.at_time > (now() at time zone 'America/Sao_Paulo')::time)
-    and not exists(select 1 from days_off d where d.day=p_day)
-    and not exists(select 1 from bookings b where b.day=p_day and b.at_time=w.at_time
-        and (b.status='confirmado' or (b.status='pendente' and b.created_at > now()-interval '12 hours')))
+    and p_day between hoje.agora::date and hoje.agora::date + 365
+    and (p_day > hoje.agora::date or w.at_time > hoje.agora::time)
+    and not exists (select 1 from days_off d where d.day = p_day)
+    and not exists (select 1 from ocupado o
+                    where w.at_time < o.fim and w.at_time + make_interval(mins => dur.minutos) > o.ini)
   order by 1 $$;
+
+-- Dias que abrem para agendamento (para o calendário das clientes): só dias da semana com horário e folgas
+create function public.calendar_info() returns jsonb
+language sql stable security definer set search_path=public as $$
+  select jsonb_build_object(
+    'hoje', (now() at time zone 'America/Sao_Paulo')::date,
+    'limite', (now() at time zone 'America/Sao_Paulo')::date + 365,
+    'dias_semana', coalesce((select jsonb_agg(distinct weekday) from weekly_hours), '[]'::jsonb),
+    'folgas', coalesce((select jsonb_agg(day) from days_off
+                        where day between (now() at time zone 'America/Sao_Paulo')::date
+                                      and (now() at time zone 'America/Sao_Paulo')::date + 365), '[]'::jsonb)
+  ) $$;
 
 create function public.create_booking(p_service int,p_day date,p_time time,p_name text,p_phone text,p_consent boolean)
 returns uuid language plpgsql security definer set search_path=public as $$
@@ -52,15 +74,17 @@ begin
   if not coalesce(p_consent,false) then raise exception 'consent_required'; end if;
   if char_length(trim(coalesce(p_name,''))) not between 2 and 80 or v_phone !~ '^[0-9]{10,11}$' then raise exception 'invalid_data'; end if;
   if not exists(select 1 from services where id=p_service and active) then raise exception 'invalid_data'; end if;
-  if not exists(select 1 from available_slots(p_day) a where a.at_time=p_time) then raise exception 'slot_taken'; end if;
+  -- Uma reserva por vez no mesmo dia: evita duas clientes pegarem horários que se sobrepõem ao mesmo tempo
+  perform pg_advisory_xact_lock(hashtext('agenda:' || p_day::text));
+  if not exists(select 1 from available_slots(p_day, p_service) a where a.at_time=p_time) then raise exception 'slot_taken'; end if;
   if (select count(*) from bookings where client_phone=v_phone and status='pendente' and created_at>now()-interval '12 hours')>=2 then raise exception 'too_many'; end if;
   update bookings set status='expirado' where day=p_day and at_time=p_time and status='pendente' and created_at<=now()-interval '12 hours';
   insert into bookings(service_id,day,at_time,client_name,client_phone) values(p_service,p_day,p_time,trim(p_name),v_phone) returning id into v_id;
   return v_id;
 exception when unique_violation then raise exception 'slot_taken';
 end $$;
-revoke all on function available_slots(date), create_booking(int,date,time,text,text,boolean) from public;
-grant execute on function available_slots(date), create_booking(int,date,time,text,text,boolean) to anon, authenticated;
+revoke all on function available_slots(date, int), calendar_info(), create_booking(int,date,time,text,text,boolean) from public;
+grant execute on function available_slots(date, int), calendar_info(), create_booking(int,date,time,text,text,boolean) to anon, authenticated;
 
 -- LGPD: anonimiza atendimentos encerrados há mais de 6 meses (rode mensalmente ou agende com pg_cron)
 create function public.anonimizar_antigos() returns int language sql security definer set search_path=public as $$
