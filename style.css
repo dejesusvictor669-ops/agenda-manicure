@@ -451,3 +451,5 @@ input:focus { border-color: var(--plum); outline: none; }
   color: var(--plum); font: 700 1.2rem "DM Sans", sans-serif; cursor: pointer;
 }
 .cal-arrow:disabled { opacity: .3; cursor: default; }
+.day-toggle { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.day-toggle .hint { margin: 0; }

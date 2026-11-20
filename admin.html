@@ -208,7 +208,22 @@
       if (calSel.slice(0, 7) === ini.slice(0, 7)) {
         const dow = new Date(calSel + "T12:00:00Z").getUTCDay();
         s.append(el("h3", `${DIAS[dow]}, ${fmtDay(calSel)}`));
-        if (off.has(calSel)) s.append(el("p", "Dia bloqueado (sem atendimento).", "hint"));
+        // Ela decide: bloquear (folga, feriado) ou liberar o dia para as clientes
+        if (calSel >= hojeISO()) {
+          const card = el("div", null, "card day-toggle");
+          if (off.has(calSel)) {
+            card.append(el("p", "🔒 Dia bloqueado: as clientes não conseguem marcar.", "hint"),
+              btn("Liberar este dia", async () => { await sb.from("days_off").delete().eq("day", calSel); cal(); }, ""));
+          } else {
+            card.append(el("p", "✅ Dia aberto para agendamento.", "hint"),
+              btn("Bloquear este dia (folga ou feriado)", async () => {
+                const abertos = (porDia[calSel] || []).filter(b => ABERTOS.includes(b.status)).length;
+                if (abertos && !confirm(`Já tem ${abertos} atendimento(s) marcado(s) neste dia. Bloquear mesmo assim? Eles continuam marcados.`)) return;
+                await sb.from("days_off").upsert({ day: calSel }); cal();
+              }));
+          }
+          s.append(card);
+        } else if (off.has(calSel)) s.append(el("p", "Dia bloqueado (sem atendimento).", "hint"));
         const lista = porDia[calSel] || [];
         if (!lista.length) s.append(empty("Nenhum atendimento neste dia."));
         lista.forEach(b => s.append(bookingCard(b, cal)));
